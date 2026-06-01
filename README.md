@@ -43,7 +43,7 @@ docker run -d \
   -v $(pwd)/mmw-data:/app/data \
   -v $(pwd)/subscribes:/app/subscribes \
   -v $(pwd)/rule_templates:/app/rule_templates \
-  ghcr.io/iluobei/miaomiaowu:latest
+  ghcr.io/dsyzayn/miaomiaowu:latest
 ```
 
 参数说明：
@@ -56,7 +56,7 @@ docker run -d \
 
 更新镜像后可执行：
 ```bash
-docker pull ghcr.io/iluobei/miaomiaowu:latest
+docker pull ghcr.io/dsyzayn/miaomiaowu:latest
 docker stop miaomiaowu && docker rm miaomiaowu
 ```
 然后按照上方命令重新启动服务。
@@ -70,7 +70,7 @@ version: '3.8'
 
 services:
   miaomiaowu:
-    image: ghcr.io/iluobei/miaomiaowu:latest
+    image: ghcr.io/dsyzayn/miaomiaowu:latest
     container_name: miaomiaowu
     restart: unless-stopped
     user: root
@@ -216,6 +216,60 @@ curl -sL https://raw.githubusercontent.com/iluobei/miaomiaowu/main/quick-install
 ![image](https://github.com/iluobei/miaomiaowu/blob/main/screenshots/user_manage.png)
 ![image](https://github.com/iluobei/miaomiaowu/blob/main/screenshots/system_settings.png)
 </details>
+
+## OIDC 登录（推荐）
+
+当前项目原有登录方式为**本地账号 + 会话 token**（`/api/login` 返回 token，前端通过 `MM-Authorization` 访问 API）。
+
+本仓库新增了 **OIDC** 登录（优先于纯 OAuth2），原因是 OIDC 在 OAuth2 授权之上提供了标准化身份声明（`id_token`、`sub`、`email` 等），更适合“登录认证”场景。
+
+### 必需环境变量
+
+- `OIDC_ISSUER_URL`：OIDC 提供方 issuer 地址（例如 Keycloak realm URL）
+- `OIDC_CLIENT_ID`：客户端 ID
+- `OIDC_CLIENT_SECRET`：客户端密钥（PKCE 场景可选）
+- `OIDC_REDIRECT_URL`：回调地址（例如 `https://your-domain/auth/callback`）
+- `OIDC_SCOPES`：默认 `openid profile email`
+- `OIDC_SESSION_SECRET`：用于 OIDC state cookie 签名校验
+
+### 可选环境变量
+
+- `ALLOWED_EMAIL_DOMAINS`：允许登录的邮箱域名（逗号分隔）
+- `ALLOWED_USERS`：允许登录的用户（email / preferred_username / sub，逗号分隔）
+- `OIDC_POST_LOGIN_REDIRECT`：回调成功后的跳转地址（默认 `/`）
+- `SESSION_COOKIE_NAME`：服务端 HttpOnly 会话 cookie 名（默认 `mmw_session`）
+- `TRUST_PROXY_HEADERS`：反代场景下是否信任 `X-Forwarded-Proto`（默认 false）
+- `COOKIE_SECURE`：强制 cookie Secure（true/false，默认自动判断）
+- `OIDC_ALLOW_INSECURE_HTTP`：仅开发调试可设 true，生产应保持 false
+
+### 安全策略
+
+- 使用 `state + nonce + PKCE`，回调时校验 state/nonce。
+- 生产环境默认要求 HTTPS（或反代下启用 `TRUST_PROXY_HEADERS=true`）。
+- Cookie 策略：
+  - `mmw_session`：`HttpOnly + SameSite=Lax + Secure(按配置/请求)`
+  - `traffic_info_access_token`：兼容前端现有逻辑的非 HttpOnly cookie（同样使用 SameSite/Secure）
+
+### Keycloak 示例
+
+```bash
+docker run -d \
+  --name miaomiaowu \
+  -p 8080:8080 \
+  -e OIDC_ISSUER_URL=https://sso.example.com/realms/mmw \
+  -e OIDC_CLIENT_ID=miaomiaowu \
+  -e OIDC_CLIENT_SECRET=replace-me \
+  -e OIDC_REDIRECT_URL=https://mmw.example.com/auth/callback \
+  -e OIDC_SCOPES="openid profile email" \
+  -e OIDC_SESSION_SECRET=replace-with-long-random-secret \
+  -e TRUST_PROXY_HEADERS=true \
+  ghcr.io/dsyzayn/miaomiaowu:latest
+```
+
+常见问题：
+- **redirect_uri mismatch**：确保 `OIDC_REDIRECT_URL` 与 IdP 后台配置完全一致（协议/域名/路径都一致）。
+- **反代后提示需要 HTTPS**：请在反代层透传 `X-Forwarded-Proto=https`，并设置 `TRUST_PROXY_HEADERS=true`。
+- **Cookie 未生效**：跨域部署时不要使用 `ALLOWED_ORIGINS=*`；需要精确填写前端域名并允许凭据。
 
 ### 技术特点
 - 🚀 单二进制文件部署，无需外部依赖

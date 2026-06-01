@@ -25,11 +25,10 @@ ARG TARGETARCH
 
 WORKDIR /app
 
-# Install build dependencies (gcc needed for CGO)
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    gcc \
-    libc6-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy go mod files
@@ -44,20 +43,20 @@ COPY . .
 # Copy built frontend from previous stage (vite outputs to /app/internal/web/dist)
 COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 
-# Build backend with optimizations (CGO enabled for SQLite WAL support)
+# Build backend with optimizations
 # Use TARGETOS and TARGETARCH for multi-platform builds
-RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -trimpath \
     -ldflags="-s -w" \
     -o /app/server \
     ./cmd/server
 
-# Final stage - use Debian slim for better QEMU compatibility
+# Final stage - Debian slim runtime
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS requests and gosu for privilege dropping
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     tzdata \

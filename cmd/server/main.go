@@ -15,9 +15,9 @@ import (
 	"miaomiaowu/internal/handler"
 	"miaomiaowu/internal/logger"
 	"miaomiaowu/internal/notify"
+	"miaomiaowu/internal/patches"
 	"miaomiaowu/internal/proxygroups"
 	"miaomiaowu/internal/storage"
-	"miaomiaowu/internal/patches"
 	"miaomiaowu/internal/version"
 	"miaomiaowu/internal/web"
 	ruletemplates "miaomiaowu/rule_templates"
@@ -146,8 +146,13 @@ func main() {
 	userRepo := auth.NewRepositoryAdapter(repo)
 	loginRateLimiter := handler.NewLoginRateLimiterWithConfig(sysCfg.LoginRateMaxAttempts, sysCfg.LoginRateWindow, sysCfg.LoginRateLockDuration)
 	loginRateLimiter.SetSkipLocalIP(sysCfg.SkipLocalIP)
+	oidcHandler := handler.NewOIDCAuthHandler(repo, tokenStore)
 
 	mux := http.NewServeMux()
+	mux.Handle("/auth/login", oidcHandler.LoginHandler())
+	mux.Handle("/auth/callback", oidcHandler.CallbackHandler())
+	mux.Handle("/auth/logout", oidcHandler.LogoutHandler())
+	mux.Handle("/api/auth/status", oidcHandler.StatusHandler())
 	mux.Handle("/api/setup/status", handler.NewSetupStatusHandler(repo))
 	mux.Handle("/api/setup/init", handler.NewInitialSetupHandler(repo))
 	mux.Handle("/api/setup/restore-backup", handler.NewSetupRestoreBackupHandler(repo))
@@ -206,6 +211,7 @@ func main() {
 	mux.Handle("/api/proxy-groups", auth.RequireToken(tokenStore, handler.NewProxyGroupsHandler(proxyGroupsStore)))
 	mux.Handle("/api/user/password", auth.RequireToken(tokenStore, handler.NewPasswordHandler(authManager)))
 	mux.Handle("/api/user/profile", auth.RequireToken(tokenStore, handler.NewProfileHandler(repo)))
+	mux.Handle("/api/me", auth.RequireToken(tokenStore, handler.NewProfileHandler(repo)))
 	mux.Handle("/api/user/settings", auth.RequireToken(tokenStore, handler.NewUserSettingsHandler(repo, tokenStore)))
 	mux.Handle("/api/user/config", auth.RequireToken(tokenStore, handler.NewUserConfigHandler(repo)))
 	mux.Handle("/api/user/2fa/status", auth.RequireToken(tokenStore, handler.NewTwoFactorStatusHandler(repo)))

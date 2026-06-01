@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,8 @@ const (
 )
 
 const AuthHeader = "MM-Authorization"
+const DefaultSessionCookieName = "mmw_session"
+const LegacyTokenCookieName = "traffic_info_access_token"
 
 type TokenStore struct {
 	mu     sync.RWMutex
@@ -188,6 +191,18 @@ func RequireToken(store *TokenStore, next http.Handler) http.Handler {
 		if token == "" {
 			token = strings.TrimSpace(r.URL.Query().Get("token"))
 		}
+		// Fallback to HttpOnly session cookie
+		if token == "" {
+			if c, err := r.Cookie(sessionCookieName()); err == nil {
+				token = strings.TrimSpace(c.Value)
+			}
+		}
+		// Backward compatibility: legacy JS token cookie
+		if token == "" {
+			if c, err := r.Cookie(LegacyTokenCookieName); err == nil {
+				token = strings.TrimSpace(c.Value)
+			}
+		}
 		if username, ok := store.Lookup(token); ok {
 			ctx := ContextWithUsername(r.Context(), username)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -196,6 +211,13 @@ func RequireToken(store *TokenStore, next http.Handler) http.Handler {
 
 		WriteUnauthorizedResponse(w)
 	})
+}
+
+func sessionCookieName() string {
+	if value := strings.TrimSpace(os.Getenv("SESSION_COOKIE_NAME")); value != "" {
+		return value
+	}
+	return DefaultSessionCookieName
 }
 
 // UserRepository provides user information for authorization checks.

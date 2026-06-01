@@ -277,6 +277,8 @@ func issueLoginSession(w http.ResponseWriter, r *http.Request, tokens *auth.Toke
 		}
 	}
 
+	setAuthCookies(w, r, token, expiry)
+
 	clientIP := GetClientIP(r)
 	logger.Info("🔐 [LOGIN_OK] 登录成功",
 		"username", user.Username,

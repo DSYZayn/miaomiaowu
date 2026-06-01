@@ -10,7 +10,7 @@ const configuredBaseURL =
 
 export const api = axios.create({
   baseURL: configuredBaseURL || undefined,
-  withCredentials: false,
+  withCredentials: true,
 })
 
 if (!api.defaults.baseURL && typeof window !== 'undefined' && window.location) {

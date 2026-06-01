@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
@@ -13,7 +14,12 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const { auth } = useAuthStore()
   const queryClient = useQueryClient()
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // ignore and continue local sign-out cleanup
+    }
     auth.reset()
     queryClient.removeQueries({ queryKey: ['traffic-summary'] })
     queryClient.removeQueries({ queryKey: ['user-token'] })
