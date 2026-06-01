@@ -113,6 +113,14 @@ function LoginView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { auth } = useAuthStore()
+  const { data: authStatus } = useQuery({
+    queryKey: ['auth-status'],
+    queryFn: async () => {
+      const response = await api.get('/api/auth/status')
+      return response.data as { oidc_enabled: boolean }
+    },
+    staleTime: 60 * 1000,
+  })
   const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null)
   const form = useForm<LoginFormValues>({
     defaultValues: {
@@ -201,6 +209,18 @@ function LoginView() {
             <Button type='submit' className='w-full' disabled={login.isPending}>
               {login.isPending ? '登录中...' : '登录'}
             </Button>
+            {authStatus?.oidc_enabled && (
+              <Button
+                type='button'
+                variant='outline'
+                className='w-full'
+                onClick={() => {
+                  window.location.href = '/auth/login'
+                }}
+              >
+                使用 OIDC 登录
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>
